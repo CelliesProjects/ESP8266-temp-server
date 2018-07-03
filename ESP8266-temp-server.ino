@@ -7,8 +7,8 @@
 #define ONE_WIRE_BUS              D1
 #define BLINK_LED_ON_REQUEST      true
 
-const char * WIFISSID =           "huiskamer";
-const char * WIFIPSK =            "0987654321";
+const char * WIFISSID =           "yourSSID";
+const char * WIFIPSK =            "yourPSK";
 
 AsyncWebServer server(80);
 
