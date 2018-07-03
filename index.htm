@@ -1,0 +1,31 @@
+<!doctype HTML>
+<html lang="en">
+<body>
+<head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<title>ESP8266 temp server</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<link rel="icon" href="data:;base64,iVBORw0KGgo=">  <!--prevent favicon requests-->
+<style>
+#data{
+width: 800px;
+height: 400px;
+line-height: 400px;
+font-size: 250px;
+margin: auto;
+overflow: hidden;
+background-color: aqua;
+text-align: center;
+}
+</style>
+</head>
+<body>
+<div id="data"><p style="font-size:25px;text-align:center;">Loading</p></div>
+<script type ="text/javascript">
+$(document).ready(function(){
+  $("#data").load("/data");
+  nextInterval = setInterval( function(){ $("#data").load("/data"); }, 750);
+});
+</script>
+</body>
+</html>
