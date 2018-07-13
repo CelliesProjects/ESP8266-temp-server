@@ -52,7 +52,7 @@ void setup(void)
   server.on( "/data", HTTP_GET, [] ( AsyncWebServerRequest * request )
   {
     AsyncResponseStream *response = request->beginResponseStream( HTML_HEADER );
-    response->printf( "%.1f%&deg;C", currentTemp );
+    response->printf( "%.1f&deg;C", currentTemp );
     request->send( response );
   });
 
