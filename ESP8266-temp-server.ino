@@ -5,35 +5,25 @@
 #include "index_htm.h"
 
 #define ONE_WIRE_BUS              D1
-#define BLINK_LED_ON_REQUEST      true
 
 const char * WIFISSID =           "yourSSID";
 const char * WIFIPSK =            "yourPSK";
 
 AsyncWebServer server(80);
 
-float currentTemp;
+float currentTemp = -273.15;
 
 OneWire  ds( ONE_WIRE_BUS ); // (a 4.7K resistor is necessary)
 
-void setup(void) {
+void setup(void)
+{
   Serial.begin( 115200 );
+  Serial.println();
   pinMode( BUILTIN_LED, OUTPUT );
   digitalWrite( BUILTIN_LED, LOW );
 
-  WiFi.persistent( false );
-  Serial.println( "Connecting..." );
   WiFi.mode( WIFI_STA );
-  WiFi.begin( WIFISSID, WIFIPSK );
-  unsigned long timeout = millis() + 15000;
-  while ( (long)( millis() - timeout ) < 0 && WiFi.status() != WL_CONNECTED )
-  {
-    delay ( 500 );
-    Serial.print ( F( "." ) );
-  }
-  Serial.println();
-
-  if ( WiFi.status() != WL_CONNECTED )
+  if ( !connectWifi() )
   {
     Serial.println( "No WiFi!" );
     while ( true )
@@ -61,11 +51,9 @@ void setup(void) {
 
   server.on( "/data", HTTP_GET, [] ( AsyncWebServerRequest * request )
   {
-    if ( BLINK_LED_ON_REQUEST ) digitalWrite( BUILTIN_LED, LOW );
     AsyncResponseStream *response = request->beginResponseStream( HTML_HEADER );
     response->printf( "%.1f%&deg;C", currentTemp );
     request->send( response );
-    if ( BLINK_LED_ON_REQUEST ) digitalWrite( BUILTIN_LED, HIGH );
   });
 
   server.onNotFound( []( AsyncWebServerRequest * request )
@@ -73,28 +61,40 @@ void setup(void) {
     Serial.printf( "Not found http://%s%s\n", request->host().c_str(), request->url().c_str());
     request->send( 404 );
   });
+
   DefaultHeaders::Instance().addHeader( "Access-Control-Allow-Origin", "*" );
   server.begin();
 }
 
-void loop(void) {
-  byte i;
-  byte type_s;
-  byte data[12];
+void loop(void)
+{
+  if ( !WiFi.isConnected() )
+  {
+    analogWriteFreq(10);
+    analogWrite( BUILTIN_LED, PWMRANGE / 2 );
+    Serial.println( "WiFi is disconnected." );
+    if ( !connectWifi() ) return;
+    Serial.println( "WiFi just reconnected" );
+  }
+
   byte addr[8];
 
-  if ( !ds.search(addr)) {
+  if ( !ds.search(addr))
+  {
     ds.reset_search();
     return;
   }
 
-  if (OneWire::crc8(addr, 7) != addr[7]) {
+  if (OneWire::crc8(addr, 7) != addr[7])
+  {
     Serial.println("Sensor CRC is not valid!");
     return;
   }
 
-  // the first ROM byte indicates which chip
-  switch (addr[0]) {
+  byte type_s;
+
+  switch (addr[0])
+  {
     case 0x10:
       type_s = 1;
       break;
@@ -105,6 +105,7 @@ void loop(void) {
       type_s = 0;
       break;
     default:
+      /*OneWire device is not a DS18B20 sensor*/
       return;
   }
 
@@ -118,16 +119,23 @@ void loop(void) {
   ds.select(addr);
   ds.write(0xBE);         // Read Scratchpad
 
+  byte i;
+  byte data[12];
+
   for ( i = 0; i < 9; i++) data[i] = ds.read();
 
   int16_t raw = (data[1] << 8) | data[0];
-  if (type_s) {
+  if (type_s)
+  {
     raw = raw << 3; // 9 bit resolution default
-    if (data[7] == 0x10) {
+    if (data[7] == 0x10)
+    {
       // "count remain" gives full 12 bit resolution
       raw = (raw & 0xFFF0) + 12 - data[6];
     }
-  } else {
+  }
+  else
+  {
     byte cfg = (data[4] & 0x60);
     if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
     else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
@@ -136,3 +144,39 @@ void loop(void) {
   }
   currentTemp = (float)raw / 16.0;
 }
+
+bool connectWifi()
+{
+  int netWorks = WiFi.scanNetworks();
+
+  if ( netWorks )
+  {
+    for (int i = 0; i < netWorks; ++i)
+    {
+      if ( WiFi.SSID(i) == WIFISSID )
+      {
+        Serial.print( "Found " );
+        Serial.print(WiFi.SSID(i));
+        Serial.print( " " );
+        Serial.print(WiFi.RSSI(i));
+        Serial.println("dB");
+        WiFi.persistent( false );
+        Serial.println( "Connecting..." );
+        WiFi.disconnect();
+        WiFi.mode(WIFI_STA);
+        digitalWrite( BUILTIN_LED, LOW );
+        WiFi.begin( WIFISSID, WIFIPSK );
+        unsigned long timeout = millis() + 15000;
+        while ( (long)( millis() - timeout ) < 0 && ( WiFi.status() != WL_CONNECTED ) )
+        {
+          delay ( 500 );
+          Serial.print ( F( "." ) );
+        }
+        Serial.println();
+        digitalWrite( BUILTIN_LED, HIGH );
+      }
+    }
+  }
+  return WiFi.isConnected();
+}
+
