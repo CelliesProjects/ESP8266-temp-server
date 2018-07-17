@@ -19,6 +19,8 @@ void setup(void)
 {
   Serial.begin( 115200 );
   Serial.println();
+
+  analogWriteFreq( 40000 );
   pinMode( BUILTIN_LED, OUTPUT );
   digitalWrite( BUILTIN_LED, LOW );
 
@@ -68,9 +70,20 @@ void setup(void)
 
 void loop(void)
 {
+  const uint16_t delayTime = 1000; /* milliseconds */
+  static unsigned long nextHeartBeat = millis() + delayTime;
+
+  if ( (long)( millis() - nextHeartBeat ) >= 0 )
+  {
+    analogWrite( BUILTIN_LED, PWMRANGE >> 5 );
+    delay(3);
+    digitalWrite( BUILTIN_LED, HIGH );
+    nextHeartBeat += delayTime;
+  }
+
   if ( !WiFi.isConnected() )
   {
-    analogWriteFreq(10);
+    analogWriteFreq( 10 );
     analogWrite( BUILTIN_LED, PWMRANGE / 2 );
     Serial.println( "WiFi is disconnected." );
     if ( !connectWifi() ) return;
