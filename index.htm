@@ -7,8 +7,15 @@
 <link rel="icon" href="data:;base64,iVBORw0KGgo=">  <!--prevent favicon requests-->
 <style>
 body{
-margin:0;
-text-align: center;
+  margin:0 auto;
+  text-align:center;
+  font-variant: small-caps;
+  font-size:20px;
+  font-family: monospace;
+}
+#linkBar{
+  background-color:aqua;
+  margin:0;
 }
 #data{
 line-height: 300px;
@@ -20,6 +27,7 @@ background-color: aqua;
 </style>
 </head>
 <body>
+<p id="linkBar"><a class="systemLink" href="logs">LOGS</a></p>
 <h1 style="text-align:center;">ESP8266-temp-server</h1>
 <script>
 function loaded_log(str){

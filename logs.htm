@@ -1,0 +1,217 @@
+<!doctype HTML>
+<html lang="en">
+<head>
+<title>Showlog</title>
+<meta charset="utf-8">
+<link rel="icon" href="data:;base64,iVBORw0KGgo=">  <!--prevent favicon requests-->
+<style>
+  @-webkit-keyframes blinker {
+  from {opacity: 1.0;}
+  to {opacity: 0.0;}
+}
+.blink{
+  color:red;
+    text-decoration: blink;
+    -webkit-animation-name: blinker;
+    -webkit-animation-duration: 0.6s;
+    -webkit-animation-iteration-count:infinite;
+    -webkit-animation-timing-function:ease-in-out;
+    -webkit-animation-direction: alternate;
+}
+html, body{
+  margin:0 auto;
+  text-align:center;
+  //width:1024px;
+  font-variant: small-caps;
+  font-size:20px;
+  font-family: monospace;
+}
+a {
+  color: black;
+  text-decoration: none;
+  margin: 0 10px;
+}
+h3{
+  margin:10px;
+}
+.systemLink{
+  padding: 3px 10px;
+}
+.systemLink:hover {
+  background:grey;
+}
+p{
+  margin:0;
+}
+#linkBar{
+  background-color:aqua;
+}
+#hostName {
+  text-transform: uppercase;
+}
+#graphContainer{
+  width:1024px;
+  margin:auto;
+}
+#editorCanvas{
+  background-color:darkgreen;
+  border:solid 1px black;
+  display:inline-block;
+  float:left;
+  margin:0;
+}
+
+#fileList{
+  overflow-y:auto;
+  margin:10px;
+  height:400px;
+  border:solid 1px black;
+}
+.logFile:hover{
+  background-color:yellow;
+  cursor:pointer;
+}
+.controlBox{
+  margin: 10px;
+  background-color: antiquewhite;
+  font-size: initial;
+  overflow:hidden;
+  display:none;
+}
+</style>
+<script src="https://code.jquery.com/jquery-3.2.1.js"></script>
+<body>
+<p id="linkBar"><a class="systemLink" href="/">HOME</a></p>
+<h1 id="hostName">ESP8266-temp-server</h1>
+<div id="graphContainer">
+<canvas class="" id="editorCanvas" width="800px" height="400px"></canvas>
+<div id="fileList" class=" controlBox"></div>
+</div>
+<script>
+//const hostName = 'http://192.168.0.182'; //debug/develop
+const hostName = '';
+
+$( document ).ready( function() {
+    editorCanvas.width = editorCanvas.width;
+    if ( hostName ) $('#hostName').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
+    $.get( hostName + '/files', function( data )
+    {
+        var fileArray = data.split('\n');
+        fileArray.sort();
+        for ( f = 0; f < fileArray.length; f++ )
+        {
+            if ( fileArray[f].endsWith( '.log' ) ) $('#fileList').append( '<div class="logFile">'+ fileArray[f].substring( 1, 11 ) + "</div>" );
+        }
+        if ( !$('.logFile').length )
+            $('#loaderBox').html( "NO LOGS FOUND" );
+        else
+        {
+            $('#loaderBox').hide();
+            $('#editorCanvas, #sideBox, .controlBox').show();
+            $('.logFile').last().click();
+        }
+    });
+});
+
+$('#fileList').on('click','.logFile',function()
+{
+    var url = hostName + "/" + $(this).text() + ".log";
+    var timeVal=[];
+    var tempVal=[];
+    var maxTemp, minTemp;
+    $.get( url, function( data )
+    {
+        var measurements = data.split('\n');
+        measurements.forEach( function( item, index )
+        {
+            if (item)
+            {
+                var temp = item.split(',');
+                if ( temp[0] && temp[1] && temp[1].length < 8 )
+                {
+                    var date = new Date( parseInt(temp[0]) * 1000 );
+                    var secondsToday = date.getHours() * 3600;
+                    secondsToday += date.getMinutes() * 60;
+                    secondsToday += date.getSeconds();
+                    timeVal.push(secondsToday);
+                    tempVal.push(parseFloat(temp[1]));
+                }
+            }
+        });
+        maxTemp = Math.max.apply(null,tempVal) + 1;
+        minTemp = Math.min.apply(null,tempVal) - 1;
+        //console.log("min:"+minTemp + "  max:"+maxTemp)
+        if ( isNaN(minTemp) || isNaN(maxTemp) )
+        {
+            const ctx = editorCanvas.getContext( "2d" );
+            ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+            return;
+        }
+        drawBackground( minTemp, maxTemp);
+        //draw the actual values
+        var ctx = editorCanvas.getContext( "2d" );
+        ctx.strokeStyle = 'rgba( 255, 0, 0, 1)';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        timeVal.forEach( function( item, index )
+        {
+            var x = map( item, 0, 86400, 0, editorCanvas.width );
+            var y = map( tempVal[index], minTemp, maxTemp, editorCanvas.height, 0 );
+            ctx.lineTo( x, y );
+        });
+        ctx.stroke();
+    });
+});
+
+function drawBackground(minTemp,maxTemp )
+{
+  const opacity = 0.3;
+  const lineDash = [ 2, 2 ];
+  var ctx = editorCanvas.getContext( "2d" );
+  ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+  ctx.beginPath();
+  if ( true )
+  {
+    ctx.strokeStyle = 'rgba( 255, 165, 0, ' + opacity + ')';
+    ctx.font = '15px serif';
+    for ( hour = 1; hour < 24; hour++ )
+    {
+      var x = map( hour, 0, 24, 0, editorCanvas.width );
+      ctx.moveTo( x, 0 );
+      ctx.lineTo( x, editorCanvas.height );
+      ctx.setLineDash([]);
+      ctx.textBaseline="middle";
+      ctx.textAlign="center";
+      ctx.strokeText( hour + "h", x, 10 );
+      ctx.strokeText( hour + "h", x, editorCanvas.height / 2 );
+      ctx.strokeText( hour + "h", x, editorCanvas.height - 10 );
+      ctx.setLineDash( lineDash );
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba( 255,255,255, '+ opacity+ ')';
+    for ( templine = minTemp; templine <= maxTemp; templine++ )
+    {
+      var y = map( templine, minTemp, maxTemp, editorCanvas.height, 0 );
+      ctx.moveTo( 0, y );
+      ctx.lineTo( editorCanvas.width, y );
+      var tempstr = parseInt( map( y, 0, editorCanvas.height, maxTemp, minTemp ) );
+      tempstr += "°";
+      ctx.setLineDash([]);
+      ctx.textBaseline="middle";
+      ctx.textAlign="center";
+      ctx.strokeText( tempstr, 20, y );
+      ctx.strokeText( tempstr, editorCanvas.width / 2, y );
+      ctx.strokeText( tempstr, editorCanvas.width - 20, y );
+      ctx.setLineDash( lineDash) ;
+    }
+    ctx.stroke();
+  }
+}
+function map( x,  in_min,  in_max,  out_min,  out_max )
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+</script>
+</body>
+</html>

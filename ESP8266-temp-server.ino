@@ -2,16 +2,30 @@
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <FS.h>
+#include <time.h>                       // time() ctime()
+#include <sys/time.h>                   // struct timeval
+
 #include "index_htm.h"
+#include "logs_htm.h"
 
 #define ONE_WIRE_BUS              D1
 
-const char * WIFISSID =           "yourSSID";
-const char * WIFIPSK =            "yourPSK";
+#define TZ              1       // (utc+) TZ in hours
+#define DST_MN          60      // use 60mn for summer time in some countries
+#define TZ_MN           ((TZ)*60)
+#define TZ_SEC          ((TZ)*3600)
+#define DST_SEC         ((DST_MN)*60)
+
+const char WIFISSID[]  =           "yourSSID";
+const char WIFIPSK[]  =            "yourPSK";
+
+const float SENSOR_ERROR = -273.15;
 
 AsyncWebServer server(80);
 
-float currentTemp = -273.15;
+float currentTemp = SENSOR_ERROR;
+bool dstStatus = true;
 
 OneWire  ds( ONE_WIRE_BUS ); // (a 4.7K resistor is necessary)
 
@@ -20,9 +34,7 @@ void setup(void)
   Serial.begin( 115200 );
   Serial.println();
 
-  analogWriteFreq( 40000 );
-  pinMode( BUILTIN_LED, OUTPUT );
-  digitalWrite( BUILTIN_LED, LOW );
+  configTime( TZ_SEC, DST_SEC, "nl.pool.ntp.org" );
 
   WiFi.mode( WIFI_STA );
   if ( !connectWifi() )
@@ -36,12 +48,6 @@ void setup(void)
       delay( 100 );
     }
   }
-  else
-  {
-    Serial.println( "Connected!" );
-    Serial.println( WiFi.localIP().toString() );
-    digitalWrite( BUILTIN_LED, HIGH );
-  }
 
   static const char * HTML_HEADER = "text/html";
 
@@ -51,45 +57,77 @@ void setup(void)
     request->send(response);
   });
 
+
   server.on( "/data", HTTP_GET, [] ( AsyncWebServerRequest * request )
   {
+    if ( currentTemp == SENSOR_ERROR )
+    {
+      request->send( 200, HTML_HEADER, F( "<p style=\"font-size:100px;color:red;\">SENSOR ERROR</p>" ) );
+    }
+    else
+    {
+      AsyncResponseStream *response = request->beginResponseStream( HTML_HEADER );
+      response->printf( "%.1f&deg;C", currentTemp );
+      request->send( response );
+    }
+  });
+
+  server.on( "/logs", HTTP_GET, [] ( AsyncWebServerRequest * request )
+  {
+    AsyncWebServerResponse *response = request->beginResponse_P( 200, HTML_HEADER, logs_htm, logs_htm_len );
+    request->send(response);
+  });
+
+  server.on( "/files", HTTP_GET, [] ( AsyncWebServerRequest * request )
+  {
     AsyncResponseStream *response = request->beginResponseStream( HTML_HEADER );
-    response->printf( "%.1f&deg;C", currentTemp );
+    Dir dir = SPIFFS.openDir("/");
+    while (dir.next()) response->printf( "%s\n", dir.fileName().c_str() );
     request->send( response );
   });
 
+  server.on( "/dststatus", HTTP_GET, [] ( AsyncWebServerRequest * request )
+  {
+    if ( request->hasArg( "dst" ) )
+    {
+      if ( request->arg( "dst" ) == "on" ) dstStatus = true;
+      else if ( request->arg( "dst" ) == "off" ) dstStatus = false;
+    }
+    AsyncResponseStream *response = request->beginResponseStream( HTML_HEADER );
+    response->printf( "DST is %s", dstStatus ? "on" : "off" );
+    request->send( response );
+  });
+
+  server.serveStatic( "/", SPIFFS, "/" );
+
   server.onNotFound( []( AsyncWebServerRequest * request )
   {
-    Serial.printf( "Not found http://%s%s\n", request->host().c_str(), request->url().c_str());
     request->send( 404 );
   });
 
   DefaultHeaders::Instance().addHeader( "Access-Control-Allow-Origin", "*" );
   server.begin();
+
+  time_t now;
+  struct tm timeinfo;
+
+  while ( timeinfo.tm_year < ( 2016 - 1900 ) ) {
+    delay(50);
+    time( &now );
+    localtime_r( &now, &timeinfo );
+  }
+  Serial.print( F( "Time synced at " ) );
+  Serial.println( asctime( localtime( &now ) ) );
+
+  if ( !SPIFFS.begin() )
+    Serial.println( F( "SPIFFS could not be mounted" ) );
 }
+
+time_t nextLogTime = 0;
+const time_t logDelaySeconds = 120;
 
 void loop(void)
 {
-  const uint16_t delayTime = 1000; /* milliseconds */
-  static unsigned long nextHeartBeat = millis() + delayTime;
-
-  if ( (long)( millis() - nextHeartBeat ) >= 0 )
-  {
-    analogWrite( BUILTIN_LED, PWMRANGE >> 5 );
-    delay(3);
-    digitalWrite( BUILTIN_LED, HIGH );
-    nextHeartBeat += delayTime;
-  }
-
-  if ( !WiFi.isConnected() )
-  {
-    analogWriteFreq( 10 );
-    analogWrite( BUILTIN_LED, PWMRANGE / 2 );
-    Serial.println( "WiFi is disconnected." );
-    if ( !connectWifi() ) return;
-    Serial.println( "WiFi just reconnected" );
-  }
-
   byte addr[8];
 
   if ( !ds.search(addr))
@@ -100,7 +138,7 @@ void loop(void)
 
   if (OneWire::crc8(addr, 7) != addr[7])
   {
-    Serial.println("Sensor CRC is not valid!");
+    Serial.println( F( "Sensor CRC is not valid!" ) );
     return;
   }
 
@@ -156,6 +194,20 @@ void loop(void)
     //// default is 12 bit resolution, 750 ms conversion time
   }
   currentTemp = (float)raw / 16.0;
+
+  time_t now;
+  time( &now );
+  if ( now >= nextLogTime )
+  {
+    logToSPIFFS( now );
+    nextLogTime = now + logDelaySeconds;
+  }
+  if ( !WiFi.isConnected() )
+  {
+    Serial.println( F( "WiFi is disconnected." ) );
+    if ( !connectWifi() ) return;
+    Serial.println( F( "WiFi just reconnected" ) );
+  }
 }
 
 bool connectWifi()
@@ -164,20 +216,19 @@ bool connectWifi()
 
   if ( netWorks )
   {
-    for (int i = 0; i < netWorks; ++i)
+    for ( int i = 0; i < netWorks; ++i )
     {
       if ( WiFi.SSID(i) == WIFISSID )
       {
-        Serial.print( "Found " );
-        Serial.print(WiFi.SSID(i));
+        Serial.print( F( "Found " ) );
+        Serial.print( WiFi.SSID(i) );
         Serial.print( " " );
-        Serial.print(WiFi.RSSI(i));
-        Serial.println("dB");
+        Serial.print( WiFi.RSSI(i) );
+        Serial.println( F( "dB" ) );
         WiFi.persistent( false );
-        Serial.println( "Connecting..." );
+        Serial.print( F( "Connecting" ) );
         WiFi.disconnect();
-        WiFi.mode(WIFI_STA);
-        digitalWrite( BUILTIN_LED, LOW );
+        WiFi.mode( WIFI_STA );
         WiFi.begin( WIFISSID, WIFIPSK );
         unsigned long timeout = millis() + 15000;
         while ( (long)( millis() - timeout ) < 0 && ( WiFi.status() != WL_CONNECTED ) )
@@ -186,7 +237,6 @@ bool connectWifi()
           Serial.print ( F( "." ) );
         }
         Serial.println();
-        digitalWrite( BUILTIN_LED, HIGH );
       }
     }
   }
