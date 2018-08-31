@@ -11,12 +11,12 @@
 }
 .blink{
   color:red;
-    text-decoration: blink;
-    -webkit-animation-name: blinker;
-    -webkit-animation-duration: 0.6s;
-    -webkit-animation-iteration-count:infinite;
-    -webkit-animation-timing-function:ease-in-out;
-    -webkit-animation-direction: alternate;
+  text-decoration: blink;
+  -webkit-animation-name: blinker;
+  -webkit-animation-duration: 0.6s;
+  -webkit-animation-iteration-count:infinite;
+  -webkit-animation-timing-function:ease-in-out;
+  -webkit-animation-direction: alternate;
 }
 html, body{
   margin:0 auto;
@@ -71,13 +71,6 @@ p{
   background-color:yellow;
   cursor:pointer;
 }
-.controlBox{
-  margin: 10px;
-  background-color: antiquewhite;
-  font-size: initial;
-  overflow:hidden;
-  display:none;
-}
 </style>
 <script src="https://code.jquery.com/jquery-3.2.1.js"></script>
 <body>
@@ -85,84 +78,79 @@ p{
 <h1 id="hostName">ESP8266-temp-server</h1>
 <div id="graphContainer">
 <canvas class="" id="editorCanvas" width="800px" height="400px"></canvas>
-<div id="fileList" class=" controlBox"></div>
+<div id="fileList"></div>
 </div>
 <script>
-//const hostName = 'http://192.168.0.182'; //debug/develop
-const hostName = '';
-
+const hostName = 'http://192.168.0.182'; //debug/develop
+//const hostName = '';
 $( document ).ready( function() {
-    editorCanvas.width = editorCanvas.width;
-    if ( hostName ) $('#hostName').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
-    $.get( hostName + '/files', function( data )
+  editorCanvas.width = editorCanvas.width;
+  if ( hostName ) $('#hostName').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
+  $.get( hostName + '/files', function( data )
+  {
+    var fileArray = data.split('\n');
+    fileArray.sort();
+    for ( f = 0; f < fileArray.length; f++ )
+      if ( fileArray[f].endsWith( '.log' ) ) $('#fileList').append( '<div class="logFile">'+ fileArray[f].substring( 1, 11 ) + "</div>" );
+    if ( !$('.logFile').length )
+      $('#loaderBox').html( "NO LOGS FOUND" );
+    else
     {
-        var fileArray = data.split('\n');
-        fileArray.sort();
-        for ( f = 0; f < fileArray.length; f++ )
-        {
-            if ( fileArray[f].endsWith( '.log' ) ) $('#fileList').append( '<div class="logFile">'+ fileArray[f].substring( 1, 11 ) + "</div>" );
-        }
-        if ( !$('.logFile').length )
-            $('#loaderBox').html( "NO LOGS FOUND" );
-        else
-        {
-            $('#loaderBox').hide();
-            $('#editorCanvas, #sideBox, .controlBox').show();
-            $('.logFile').last().click();
-        }
-    });
+      $('#loaderBox').hide();
+      $('#editorCanvas, #sideBox, .controlBox').show();
+      $('.logFile').last().click();
+    }
+  });
 });
-
 $('#fileList').on('click','.logFile',function()
 {
-    var url = hostName + "/" + $(this).text() + ".log";
-    var timeVal=[];
-    var tempVal=[];
-    var maxTemp, minTemp;
-    $.get( url, function( data )
+  var url = hostName + "/" + $(this).text() + ".log";
+  var timeVal=[];
+  var tempVal=[];
+  var maxTemp, minTemp;
+  $.get( url, function( data )
+  {
+    var measurements = data.split('\n');
+    measurements.forEach( function( item, index )
     {
-        var measurements = data.split('\n');
-        measurements.forEach( function( item, index )
+      if (item)
+      {
+        var temp = item.split(',');
+        if ( temp[0] && temp[1] && temp[1].length < 8 )
         {
-            if (item)
-            {
-                var temp = item.split(',');
-                if ( temp[0] && temp[1] && temp[1].length < 8 )
-                {
-                    var date = new Date( parseInt(temp[0]) * 1000 );
-                    var secondsToday = date.getHours() * 3600;
-                    secondsToday += date.getMinutes() * 60;
-                    secondsToday += date.getSeconds();
-                    timeVal.push(secondsToday);
-                    tempVal.push(parseFloat(temp[1]));
-                }
-            }
-        });
-        maxTemp = Math.max.apply(null,tempVal) + 1;
-        minTemp = Math.min.apply(null,tempVal) - 1;
-        //console.log("min:"+minTemp + "  max:"+maxTemp)
-        if ( isNaN(minTemp) || isNaN(maxTemp) )
-        {
-            const ctx = editorCanvas.getContext( "2d" );
-            ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
-            return;
+          var date = new Date( parseInt(temp[0]) * 1000 );
+          var secondsToday = date.getHours() * 3600;
+          secondsToday += date.getMinutes() * 60;
+          secondsToday += date.getSeconds();
+          timeVal.push(secondsToday);
+          tempVal.push(parseFloat(temp[1]));
         }
-        drawBackground( minTemp, maxTemp);
-        //draw the actual values
-        var ctx = editorCanvas.getContext( "2d" );
-        ctx.strokeStyle = 'rgba( 255, 0, 0, 1)';
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        timeVal.forEach( function( item, index )
-        {
-            var x = map( item, 0, 86400, 0, editorCanvas.width );
-            var y = map( tempVal[index], minTemp, maxTemp, editorCanvas.height, 0 );
-            ctx.lineTo( x, y );
-        });
-        ctx.stroke();
+      }
     });
+    maxTemp = Math.trunc( Math.max.apply(null,tempVal) + 2 );
+    minTemp = Math.trunc( Math.min.apply(null,tempVal) - 2 );
+    //console.log("min:"+minTemp + "  max:"+maxTemp)
+    if ( isNaN(minTemp) || isNaN(maxTemp) )
+    {
+      const ctx = editorCanvas.getContext( "2d" );
+      ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+      return;
+    }
+    drawBackground( minTemp, maxTemp);
+    //draw the actual values
+    var ctx = editorCanvas.getContext( "2d" );
+    ctx.strokeStyle = 'rgba( 255, 0, 0, 1)';
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    timeVal.forEach( function( item, index )
+    {
+      var x = map( item, 0, 86400, 0, editorCanvas.width );
+      var y = map( tempVal[index], minTemp, maxTemp, editorCanvas.height, 0 );
+      ctx.lineTo( x, y );
+    });
+    ctx.stroke();
+  });
 });
-
 function drawBackground(minTemp,maxTemp )
 {
   const opacity = 0.3;
