@@ -20,6 +20,7 @@
 const char WIFISSID[]  =           "yourSSID";
 const char WIFIPSK[]  =            "yourPSK";
 
+const uint8_t ONBOARD_LED = 2;
 const float SENSOR_ERROR = -273.15;
 
 AsyncWebServer server(80);
@@ -42,9 +43,9 @@ void setup(void)
     Serial.println( "No WiFi!" );
     while ( true )
     {
-      digitalWrite( BUILTIN_LED, LOW );
+      digitalWrite( ONBOARD_LED, LOW );
       delay( 100 );
-      digitalWrite( BUILTIN_LED, HIGH );
+      digitalWrite( ONBOARD_LED, HIGH );
       delay( 100 );
     }
   }
