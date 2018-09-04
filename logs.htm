@@ -46,7 +46,7 @@ p{
 #linkBar{
   background-color:aqua;
 }
-#hostName {
+#title {
   text-transform: uppercase;
 }
 #graphContainer{
@@ -75,17 +75,17 @@ p{
 <script src="https://code.jquery.com/jquery-3.2.1.js"></script>
 <body>
 <p id="linkBar"><a class="systemLink" href="/">HOME</a></p>
-<h1 id="hostName">ESP8266-temp-server</h1>
+<h1 id="title">ESP8266-temp-server</h1>
 <div id="graphContainer">
 <canvas class="" id="editorCanvas" width="800px" height="400px"></canvas>
 <div id="fileList"></div>
 </div>
 <script>
-const hostName = 'http://192.168.0.182'; //debug/develop
-//const hostName = '';
+//const hostName = 'http://192.168.0.182'; //debug/develop
+const hostName = '';
 $( document ).ready( function() {
   editorCanvas.width = editorCanvas.width;
-  if ( hostName ) $('#hostName').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
+  if ( hostName ) $('#title').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
   $.get( hostName + '/files', function( data )
   {
     var fileArray = data.split('\n');
