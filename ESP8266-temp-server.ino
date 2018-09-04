@@ -8,8 +8,10 @@
 
 #include "index_htm.h"
 #include "logs_htm.h"
+#include "wifi_credentials.h"           // change your WiFi settings in this file
 
 #define ONE_WIRE_BUS              D1
+#define ONBOARD_LED               D4
 
 #define TZ              1       // (utc+) TZ in hours
 #define DST_MN          60      // use 60mn for summer time in some countries
@@ -17,13 +19,7 @@
 #define TZ_SEC          ((TZ)*3600)
 #define DST_SEC         ((DST_MN)*60)
 
-const char WIFISSID[]  =           "yourSSID";
-const char WIFIPSK[]  =            "yourPSK";
-
-const uint8_t ONBOARD_LED = 2;
 const float SENSOR_ERROR = -273.15;
-
-AsyncWebServer server(80);
 
 float currentTemp = SENSOR_ERROR;
 bool dstStatus = true;
@@ -40,7 +36,10 @@ void setup(void)
   WiFi.mode( WIFI_STA );
   if ( !connectWifi() )
   {
-    Serial.println( "No WiFi!" );
+    Serial.println( "No WiFi! Check 'wifi_credentials.h'" );
+    delay(100);
+    Serial.end();
+    pinMode( ONBOARD_LED, OUTPUT );
     while ( true )
     {
       digitalWrite( ONBOARD_LED, LOW );
@@ -52,6 +51,7 @@ void setup(void)
 
   Serial.println( WiFi.localIP().toString() );
 
+  static AsyncWebServer server(80);
   static const char * HTML_HEADER = "text/html";
 
   server.on( "/", HTTP_GET, [] ( AsyncWebServerRequest * request )
