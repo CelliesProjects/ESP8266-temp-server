@@ -55,14 +55,12 @@ void deleteOldLogFiles()
 
   while ( logFiles.size() > SAVED_LOGFILES )
   {
-    std::list<String>::iterator thisFile;
+    std::list<String>::iterator oldestFile = logFiles.begin();
 
-    thisFile = logFiles.begin();
-
-    String filename = *thisFile;
+    String filename = *oldestFile;
 
     SPIFFS.remove( filename.c_str() );
-    logFiles.erase( thisFile );
+    logFiles.erase( oldestFile );
   }
 }
 
