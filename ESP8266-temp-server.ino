@@ -49,6 +49,8 @@ void setup(void)
     }
   }
 
+  Serial.println( WiFi.localIP().toString() );
+
   static const char * HTML_HEADER = "text/html";
 
   server.on( "/", HTTP_GET, [] ( AsyncWebServerRequest * request )
