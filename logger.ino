@@ -1,5 +1,7 @@
 void logToSPIFFS( const time_t now )
 {
+  deleteOldLogFiles();
+
   struct tm          timeinfo;
   char           fileName[17];
   char            content[60];
@@ -7,25 +9,12 @@ void logToSPIFFS( const time_t now )
   localtime_r( &now, &timeinfo );
   strftime( fileName , sizeof( fileName ), "/%F.log", &timeinfo );
 
-  Serial.printf(  "Current logfile: %s\n", fileName );
-
   snprintf( content, sizeof( content ), "%i,%3.2f", now - DST_SEC - TZ_SEC, currentTemp );
 
   if ( !writelnFile( SPIFFS, fileName, content ) )
   {
     Serial.println( F( "Something wrong writing to file" ) );
   }
-
-  Serial.println();
-  Serial.println( F( "Files on spiffs:" ) );
-  Dir dir = SPIFFS.openDir( "/" );
-  while ( dir.next() ) {
-    Serial.print( dir.fileName() );
-    Serial.print( F( " size: " ) );
-    File f = dir.openFile( "r" );
-    Serial.println( f.size() );
-  }
-  Serial.println();
 }
 
 bool writelnFile( fs::FS &fs, const char * path, const char * message )
@@ -45,3 +34,35 @@ bool writelnFile( fs::FS &fs, const char * path, const char * message )
   file.close();
   return true;
 }
+
+void deleteOldLogFiles()
+{
+  std::list<String> logFiles;
+
+  Dir dir = SPIFFS.openDir( F( "/" ) );
+  while ( dir.next() )
+  {
+    if ( dir.fileName().endsWith( F( ".log" ) ) )
+    {
+      logFiles.push_back( dir.fileName() );
+    }
+  }
+
+  if ( logFiles.size() > SAVED_LOGFILES )
+  {
+    logFiles.sort();
+  }
+
+  while ( logFiles.size() > SAVED_LOGFILES )
+  {
+    std::list<String>::iterator thisFile;
+
+    thisFile = logFiles.begin();
+
+    String filename = *thisFile;
+
+    SPIFFS.remove( filename.c_str() );
+    logFiles.erase( thisFile );
+  }
+}
+
