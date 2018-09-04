@@ -14,6 +14,7 @@
 #define ONE_WIRE_BUS              D1
 #define ONBOARD_LED               D4
 #define SAVED_LOGFILES            30
+#define SENSOR_ERROR              -273.15
 
 #define TZ              1       // (utc+) TZ in hours
 #define DST_MN          60      // use 60mn for summer time in some countries
@@ -21,7 +22,6 @@
 #define TZ_SEC          ((TZ)*3600)
 #define DST_SEC         ((DST_MN)*60)
 
-const float SENSOR_ERROR = -273.15;
 
 float currentTemp = SENSOR_ERROR;
 bool dstStatus = true;
