@@ -21,7 +21,7 @@
 html, body{
   margin:0 auto;
   text-align:center;
-  //width:1024px;
+  width:1024px;
   font-variant: small-caps;
   font-size:20px;
   font-family: monospace;
@@ -46,46 +46,44 @@ p{
 #linkBar{
   background-color:aqua;
 }
-#title {
+#dateBar {
   text-transform: uppercase;
 }
 #graphContainer{
-  width:1024px;
-  margin:auto;
 }
 #editorCanvas{
+  width:800px;
   background-color:darkgreen;
   border:solid 1px black;
   display:inline-block;
   float:left;
-  margin:0;
 }
 
 #fileList{
   overflow-y:auto;
-  margin:10px;
   height:400px;
   border:solid 1px black;
+  width:220px;
 }
 .logFile:hover{
-  background-color:yellow;
   cursor:pointer;
 }
 </style>
 <script src="https://code.jquery.com/jquery-3.2.1.js"></script>
 <body>
-<p id="linkBar"><a class="systemLink" href="/">HOME</a></p>
-<h1 id="title">ESP8266-temp-server</h1>
+<div id="linkBar"><a class="systemLink" href="/">HOME</a></div>
+<h1 id="dateBar">ESP8266-temp-server</h1>
 <div id="graphContainer">
 <canvas class="" id="editorCanvas" width="800px" height="400px"></canvas>
 <div id="fileList"></div>
 </div>
+<div id="minMax"><p id="minimum">loading</p><p id="maximum">loading</p></div>
 <script>
-//const hostName = 'http://192.168.0.182'; //debug/develop
+//const hostName = 'http://192.168.0.100'; //debug/develop
 const hostName = '';
 $( document ).ready( function() {
   editorCanvas.width = editorCanvas.width;
-  if ( hostName ) $('#title').append( '<p class="blink">!!!!!debug enabled!!!!!</p>');
+  if ( hostName ) $('#dateBar').html( '<p class="blink">'+hostName+'</p>');
   $.get( hostName + '/files', function( data )
   {
     var fileArray = data.split('\n');
@@ -93,21 +91,25 @@ $( document ).ready( function() {
     for ( f = 0; f < fileArray.length; f++ )
       if ( fileArray[f].endsWith( '.log' ) ) $('#fileList').append( '<div class="logFile">'+ fileArray[f].substring( 1, 11 ) + "</div>" );
     if ( !$('.logFile').length )
-      $('#loaderBox').html( "NO LOGS FOUND" );
+      $('#graphContainer').html( "NO LOGS FOUND" );
     else
     {
-      $('#loaderBox').hide();
-      $('#editorCanvas, #sideBox, .controlBox').show();
       $('.logFile').last().click();
     }
   });
 });
 $('#fileList').on('click','.logFile',function()
 {
+  var currentClicked = this;
+  $('.logFile').css('background-color','white').css('color','black');
+  $('#dateBar').html('LOADING '+$(this).text());
+  $(currentClicked).css('color','grey').css('background-color','yellow');
   var url = hostName + "/" + $(this).text() + ".log";
   var timeVal=[];
   var tempVal=[];
-  var maxTemp, minTemp;
+  var maxGridTemp,minGridTemp,maxMeasurement,minMeasurement;
+  $('#minimum, #maximum').html('&nbsp;');
+  $('#minimum').text('LOADING '+$(this).text());
   $.get( url, function( data )
   {
     var measurements = data.split('\n');
@@ -127,31 +129,48 @@ $('#fileList').on('click','.logFile',function()
         }
       }
     });
-    maxTemp = Math.trunc( Math.max.apply(null,tempVal) + 2 );
-    minTemp = Math.trunc( Math.min.apply(null,tempVal) - 2 );
-    //console.log("min:"+minTemp + "  max:"+maxTemp)
-    if ( isNaN(minTemp) || isNaN(maxTemp) )
+    minMeasurement = Math.min.apply(null,tempVal)
+    maxMeasurement = Math.max.apply(null,tempVal)
+    $('#minimum').html("Minimum: "+minMeasurement+"&deg; -> ");
+    $('#maximum').html("Maximum: "+maxMeasurement+"&deg; -> ");
+    minGridTemp = Math.trunc(minMeasurement-1);
+    maxGridTemp = Math.trunc(maxMeasurement+2);
+    if(isNaN(minMeasurement)||isNaN(maxMeasurement))
     {
       const ctx = editorCanvas.getContext( "2d" );
       ctx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
       return;
     }
-    drawBackground( minTemp, maxTemp);
-    //draw the actual values
-    var ctx = editorCanvas.getContext( "2d" );
+    drawBackground( minGridTemp, maxGridTemp);
+    var ctx = editorCanvas.getContext( "2d" ); /* draw the actual values */
     ctx.strokeStyle = 'rgba( 255, 0, 0, 1)';
     ctx.setLineDash([]);
     ctx.beginPath();
+    var minSet = false;
+    var maxSet = false;
     timeVal.forEach( function( item, index )
     {
       var x = map( item, 0, 86400, 0, editorCanvas.width );
-      var y = map( tempVal[index], minTemp, maxTemp, editorCanvas.height, 0 );
+      var y = map( tempVal[index], minGridTemp, maxGridTemp, editorCanvas.height, 0 );
+      if ( tempVal[index] == minMeasurement&&!minSet)
+      {
+        $('#minimum').html($('#minimum').html()+" "+new Date(1000*item).toISOString().substr(11, 8));
+        minSet = true;
+      }
+      if ( tempVal[index] == maxMeasurement&&!maxSet)
+      {
+        $('#maximum').html($('#maximum').html()+" "+new Date(1000*item).toISOString().substr(11, 8));
+        maxSet = true;
+      }
       ctx.lineTo( x, y );
     });
     ctx.stroke();
+    $('.logFile').css('color','black');
+    $(currentClicked).css('background-color','yellow').css('color','black');
+    $('#dateBar').html($(currentClicked).text());
   });
 });
-function drawBackground(minTemp,maxTemp )
+function drawBackground(minGridTemp,maxGridTemp )
 {
   const opacity = 0.3;
   const lineDash = [ 2, 2 ];
@@ -178,12 +197,12 @@ function drawBackground(minTemp,maxTemp )
     ctx.stroke();
     ctx.beginPath();
     ctx.strokeStyle = 'rgba( 255,255,255, '+ opacity+ ')';
-    for ( templine = minTemp; templine <= maxTemp; templine++ )
+    for ( templine = minGridTemp; templine <= maxGridTemp; templine++ )
     {
-      var y = map( templine, minTemp, maxTemp, editorCanvas.height, 0 );
+      var y = map( templine, minGridTemp, maxGridTemp, editorCanvas.height, 0 );
       ctx.moveTo( 0, y );
       ctx.lineTo( editorCanvas.width, y );
-      var tempstr = parseInt( map( y, 0, editorCanvas.height, maxTemp, minTemp ) );
+      var tempstr = parseInt( map( y, 0, editorCanvas.height, maxGridTemp, minGridTemp ) );
       tempstr += "°";
       ctx.setLineDash([]);
       ctx.textBaseline="middle";
